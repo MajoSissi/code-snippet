@@ -1,108 +1,144 @@
-/*
-  API: https://explame.workers.dev?file={filename}&type={type}&gist_id={gist_id}
-  环境变量: GITHUB_TOKEN
-  参数介绍:
-  gist_id - 提交的gist id路径
-  file - 要提交的文件名称
-  type - 提交类型 [ wireguard, mihomo, ... ]
-*/
+// 处理所有网络请求
 addEventListener('fetch', event => {
   event.respondWith(handleRequest(event.request))
 })
 
-// 文件类型处理器注册表
+// 文件类型处理器注册表 - 可扩展添加更多类型
 const handlers = {
-  'wireguard': handleWireguardFile,
   'mihomo': handleMihomoFile
-  // 可以在这里注册更多类型的处理器
 }
 
+/**
+ * 主请求处理函数
+ * @param {Request} request - 客户端请求对象
+ * @return {Response} 响应对象
+ */
 async function handleRequest(request) {
-  // 只处理POST请求
-  if (request.method !== 'POST') {
-    return new Response('请使用POST方法。', { status: 405 })
+  const url = new URL(request.url)
+  const pathname = url.pathname
+  
+  // 获取gist_id (现在从路径中获取而不是查询参数)
+  // 移除开头的斜杠以获取路径中的gist_id
+  const gistId = pathname.substring(1)
+  
+  if (!gistId) {
+    return new Response('缺少gist_id，请使用格式: /{gist_id}?file={filename}', { status: 400 })
+  }
+  
+  const file = url.searchParams.get('file')
+  const type = url.searchParams.get('type')
+  
+  if (!file) {
+    return new Response('缺少file参数', { status: 400 })
   }
 
-  try {
-    // 获取请求参数
-    const url = new URL(request.url)
-    const file = url.searchParams.get('file')
-    const type = url.searchParams.get('type')
-    const gistId = url.searchParams.get('gist_id')
-
-    // 验证参数
-    if (!file) {
-      return new Response('缺少file参数', { status: 400 })
-    }
-    
-    if (!type) {
-      return new Response('缺少type参数', { status: 400 })
-    }
-    
-    // 检查处理器是否存在
-    if (!handlers[type]) {
-      return new Response(`不支持的文件类型: ${type}。支持的类型: ${Object.keys(handlers).join(', ')}`, { status: 400 })
-    }
-
-    if (!gistId) {
-      return new Response('缺少gist_id参数', { status: 400 })
-    }
-
-    // 获取请求体
-    const requestBody = await request.text()
-    if (!requestBody) {
-      return new Response('请求体为空', { status: 400 })
-    }
-
-    // 获取GitHub Token
-    const githubToken = GITHUB_TOKEN
-    if (!githubToken) {
-      return new Response('未配置GitHub token', { status: 500 })
-    }
-
-    // 获取gist信息
-    const existingGist = await getGist(gistId, githubToken)
-    if (!existingGist.success) {
-      return new Response(existingGist.message, { status: existingGist.status })
-    }
-
-    // 调用对应类型的处理器处理文件内容
-    const contentResult = await handlers[type](file, requestBody, existingGist.data, githubToken)
-    if (!contentResult.success) {
-      return new Response(contentResult.message, { status: contentResult.status })
-    }
-    
-    // 更新gist
-    const updateResult = await updateGistFile(gistId, file, contentResult.content, githubToken)
-    if (!updateResult.success) {
-      return new Response(updateResult.message, { status: updateResult.status })
-    }
-    
-    // 返回成功消息
-    return new Response(JSON.stringify({
-      success: true,
-      message: '文件更新成功',
-      gist_id: updateResult.data.id,
-      file_url: updateResult.data.files[file].raw_url
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
-    })
-    
-  } catch (error) {
-    return new Response('错误: ' + error.message, { status: 500 })
+  const githubToken = GITHUB_TOKEN
+  if (!githubToken) {
+    return new Response('未配置GitHub token', { status: 500 })
+  }
+  
+  if (request.method === 'GET') {
+    return handleGetRequest(file, gistId, githubToken)
+  } else if (request.method === 'POST') {
+    return handlePostRequest(file, type, gistId, request, githubToken)
+  } else {
+    return new Response('不支持的请求方法，仅支持GET和POST', { status: 405 })
   }
 }
 
 /**
+ * 处理GET请求 - 获取文件内容
+ * @param {string} file - 文件名
+ * @param {string} gistId - Gist ID
+ * @param {string} token - GitHub Token
+ * @return {Response} 响应对象
+ */
+async function handleGetRequest(file, gistId, token) {
+  const gistResult = await getGist(gistId, token)
+  if (!gistResult.success) {
+    return new Response(gistResult.message, { status: gistResult.status })
+  }
+  
+  const gistData = gistResult.data
+  if (!gistData.files || !gistData.files[file]) {
+    return new Response(`Gist中未找到文件: ${file}`, { status: 404 })
+  }
+  
+  const fileRawUrl = gistData.files[file].raw_url
+  const fileResult = await getFileContent(fileRawUrl)
+  
+  if (!fileResult.success) {
+    return new Response(fileResult.message, { status: fileResult.status })
+  }
+  
+  return new Response(fileResult.content, {
+    status: 200,
+    headers: { 'Content-Type': 'text/plain' }
+  })
+}
+
+/**
+ * 处理POST请求 - 上传或更新文件内容
+ * @param {string} file - 文件名
+ * @param {string} type - 处理类型
+ * @param {string} gistId - Gist ID
+ * @param {Request} request - 客户端请求对象
+ * @param {string} token - GitHub Token
+ * @return {Response} 响应对象
+ */
+async function handlePostRequest(file, type, gistId, request, token) {
+  const requestBody = await request.text()
+  if (!requestBody) {
+    return new Response('请求体为空', { status: 400 })
+  }
+
+  const existingGist = await getGist(gistId, token)
+  if (!existingGist.success) {
+    return new Response(existingGist.message, { status: existingGist.status })
+  }
+
+  let contentResult;
+  
+  if (type && handlers[type]) {
+    contentResult = await handlers[type](file, requestBody, existingGist.data, token)
+    if (!contentResult.success) {
+      return new Response(contentResult.message, { status: contentResult.status })
+    }
+  } else {
+    contentResult = {
+      success: true,
+      content: requestBody
+    }
+  }
+  
+  const updateResult = await updateGistFile(gistId, file, contentResult.content, token)
+  if (!updateResult.success) {
+    return new Response(updateResult.message, { status: updateResult.status })
+  }
+  
+  return new Response(JSON.stringify({
+    success: true,
+    message: '文件更新成功',
+    gist_id: updateResult.data.id,
+    file_url: updateResult.data.files[file].raw_url
+  }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' }
+  })
+}
+
+/**
  * 获取Gist信息
+ * @param {string} gistId - Gist ID
+ * @param {string} token - GitHub Token
+ * @return {Object} 包含请求结果的对象
  */
 async function getGist(gistId, token) {
   try {
     const response = await fetch(`https://api.github.com/gists/${gistId}`, {
       headers: {
         'Authorization': `token ${token}`,
-        'User-Agent': 'Node.js Latest'
+        'User-Agent': 'Cloudflare-Worker'
       }
     })
     
@@ -135,6 +171,11 @@ async function getGist(gistId, token) {
 
 /**
  * 更新Gist文件
+ * @param {string} gistId - Gist ID
+ * @param {string} fileName - 文件名
+ * @param {string} content - 文件内容
+ * @param {string} token - GitHub Token
+ * @return {Object} 包含请求结果的对象
  */
 async function updateGistFile(gistId, fileName, content, token) {
   try {
@@ -179,6 +220,8 @@ async function updateGistFile(gistId, fileName, content, token) {
 
 /**
  * 获取文件内容
+ * @param {string} fileUrl - 文件URL
+ * @return {Object} 包含请求结果的对象
  */
 async function getFileContent(fileUrl) {
   try {
@@ -205,24 +248,16 @@ async function getFileContent(fileUrl) {
 }
 
 /**
- * Wireguard文件处理器
- * 直接将请求体内容作为文件内容
- */
-async function handleWireguardFile(fileName, requestBody, gistData, token) {
-  // 对于wireguard，直接使用请求体作为文件内容
-  return {
-    success: true,
-    content: requestBody
-  }
-}
-
-/**
- * Mihomo文件处理器 
+ * Mihomo配置文件处理器 
  * 处理JSON节点的添加和更新
+ * @param {string} fileName - 文件名
+ * @param {string} requestBody - 请求体内容
+ * @param {Object} gistData - Gist数据对象
+ * @param {string} token - GitHub Token
+ * @return {Object} 包含处理结果的对象
  */
 async function handleMihomoFile(fileName, requestBody, gistData, token) {
   try {
-    // 解析请求体JSON
     let requestJson
     try {
       requestJson = JSON.parse(requestBody)
@@ -242,10 +277,8 @@ async function handleMihomoFile(fileName, requestBody, gistData, token) {
       }
     }
     
-    // 默认内容结构
     let existingContent = { "proxies": [] }
     
-    // 检查文件是否已存在于gist中
     if (gistData.files && gistData.files[fileName]) {
       const fileRawUrl = gistData.files[fileName].raw_url
       const fileResult = await getFileContent(fileRawUrl)
@@ -254,29 +287,23 @@ async function handleMihomoFile(fileName, requestBody, gistData, token) {
         try {
           existingContent = JSON.parse(fileResult.content)
           
-          // 确保proxies字段存在且是数组
           if (!existingContent.proxies || !Array.isArray(existingContent.proxies)) {
             existingContent.proxies = []
           }
         } catch (e) {
-          // 如果解析失败，使用默认结构
           existingContent = { "proxies": [] }
         }
       }
     }
     
-    // 查找是否存在同名节点
     const nodeIndex = existingContent.proxies.findIndex(p => p.name === requestJson.name)
     
     if (nodeIndex >= 0) {
-      // 替换已存在的节点
       existingContent.proxies[nodeIndex] = requestJson
     } else {
-      // 添加新节点
       existingContent.proxies.push(requestJson)
     }
     
-    // 返回处理后的内容
     return {
       success: true,
       content: JSON.stringify(existingContent, null, 2)
