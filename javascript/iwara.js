@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Iwara 外部播放器
 // @namespace    none
-// @version      1.1
+// @version,     1.1
 // @description  支持外部播放器和链接代理
 // @author       EvilSissi
 // @match        *://*.iwara.tv/*
@@ -15,6 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @connect      api.iwara.tv
 // @connect      files.iwara.tv
+// @connect      *
 // ==/UserScript==
 
 (function () {
@@ -414,7 +415,7 @@
         .iwara-modal-content {
             background: #1a1d2e;
             border-radius: 10px;
-            width: 50%;
+            width: 900px;
             max-width: 1100px;
             height: 85vh;
             max-height: 750px;
@@ -928,6 +929,36 @@
             color: #999;
             text-decoration: line-through;
         }
+        .iwara-proxy-status {
+            padding: 4px 10px;
+            border: 1px solid;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+            min-width: 70px;
+            text-align: center;
+        }
+        .iwara-proxy-status.checking {
+            background: rgba(102, 126, 234, 0.2);
+            border-color: rgba(102, 126, 234, 0.4);
+            color: #667eea;
+        }
+        .iwara-proxy-status.success {
+            background: rgba(81, 207, 102, 0.2);
+            border-color: rgba(81, 207, 102, 0.4);
+            color: #51cf66;
+        }
+        .iwara-proxy-status.failed {
+            background: rgba(255, 107, 107, 0.2);
+            border-color: rgba(255, 107, 107, 0.4);
+            color: #ff6b6b;
+        }
+        .iwara-proxy-status.slow {
+            background: rgba(255, 165, 0, 0.2);
+            border-color: rgba(255, 165, 0, 0.4);
+            color: #ffa500;
+        }
         .iwara-proxy-toggle {
             padding: 4px 12px;
             background: rgba(81, 207, 102, 0.2);
@@ -997,6 +1028,9 @@
 
     // 代理列表（数组格式：[{url: '', enabled: true}, ...]）
     let proxyList = GM_getValue('proxyList', []);
+
+    // 代理检测超时时间（毫秒）
+    let proxyTimeout = GM_getValue('proxyTimeout', 10000);
 
     // 外部播放器名称
     let externalPlayer = GM_getValue('externalPlayer', 'MPV');
@@ -1295,6 +1329,7 @@
         let currentDefaultPlayer = externalPlayer; // 临时存储的默认播放器
         let tempProxyList = JSON.parse(JSON.stringify(proxyList)); // 临时代理列表
         let tempButtonSettings = JSON.parse(JSON.stringify(buttonSettings)); // 临时按钮设置
+        let tempProxyTimeout = proxyTimeout; // 临时代理超时时间
         let editingPlayer = null; // 当前编辑的播放器
 
         // 创建弹窗容器
@@ -1740,13 +1775,27 @@
                 <div class="iwara-settings-section">
                     <div class="iwara-settings-header">
                         <h4>🔗 代理服务</h4>
-                        <button class="iwara-btn-small" id="toggle-edit-mode">📝 手动编辑</button>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="iwara-btn-small" id="save-multi-edit" style="display: none;">💾 保存</button>
+                            <button class="iwara-btn-small" id="toggle-edit-mode">📝 手动编辑</button>
+                        </div>
                     </div>
                     
                     <div id="single-add-mode" style="display: block;">
                         <div style="display: flex; gap: 8px; margin-bottom: 12px;">
                             <input type="text" id="new-proxy-input" placeholder="代理地址，多个将会随机选取" class="iwara-form-input" style="flex: 1;">
                             <button class="iwara-btn-small" id="add-proxy">➕ 添加</button>
+                        </div>
+                        <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;">
+                            <div style="display: flex; align-items: center; gap: 4px;">
+                                <label style="color: #94a3b8; font-size: 13px; white-space: nowrap;">超时</label>
+                                <input type="number" id="proxy-timeout" value="${tempProxyTimeout}" min="1" max="100000" step="100" class="iwara-form-input" style="width: 80px; padding: 4px 8px; font-size: 13px;">
+                                <span style="color: #94a3b8; font-size: 13px;">ms</span>
+                            </div>
+                            <button class="iwara-btn-small" id="check-all-proxies">🔍 检测延迟</button>
+                            <button class="iwara-btn-small" id="enable-all-proxies" style="background: rgba(34, 197, 94, 0.2); border-color: rgba(34, 197, 94, 0.4); color: #22c55e;">✓ 启用全部</button>
+                            <button class="iwara-btn-small" id="disable-failed-proxies" style="background: rgba(255, 165, 0, 0.2); border-color: rgba(255, 165, 0, 0.4); color: #ffa500;">⚠️ 禁用超时</button>
+                            <button class="iwara-btn-small" id="delete-failed-proxies" style="background: rgba(255, 59, 48, 0.2); border-color: rgba(255, 59, 48, 0.4); color: #ff3b30;">🗑️ 删除超时</button>
                         </div>
                         <div id="proxy-list-container" class="iwara-proxy-list" style="max-height: 200px;"></div>
                     </div>
@@ -1823,10 +1872,17 @@
             tempProxyList.forEach((proxy, index) => {
                 const item = document.createElement('div');
                 item.className = 'iwara-proxy-item' + (proxy.enabled ? '' : ' disabled');
+                item.dataset.index = index;
 
                 const urlSpan = document.createElement('span');
                 urlSpan.className = 'proxy-url';
                 urlSpan.textContent = proxy.url;
+
+                // 状态显示
+                const statusSpan = document.createElement('span');
+                statusSpan.className = 'iwara-proxy-status';
+                statusSpan.style.display = 'none';
+                statusSpan.textContent = '-';
 
                 const toggleBtn = document.createElement('button');
                 toggleBtn.className = 'iwara-proxy-toggle' + (proxy.enabled ? '' : ' disabled');
@@ -1847,10 +1903,180 @@
                 });
 
                 item.appendChild(urlSpan);
+                item.appendChild(statusSpan);
                 item.appendChild(toggleBtn);
                 item.appendChild(deleteBtn);
                 container.appendChild(item);
             });
+        }
+
+        // 检测单个代理
+        async function checkSingleProxy(proxyUrl, timeoutMs) {
+            const startTime = performance.now();
+            
+            return new Promise((resolve) => {
+                const timeout = setTimeout(() => {
+                    resolve({ success: false, latency: -1, error: 'timeout' });
+                }, timeoutMs);
+
+                GM_xmlhttpRequest({
+                    method: 'GET',
+                    url: proxyUrl,
+                    timeout: timeoutMs,
+                    onload: function(response) {
+                        clearTimeout(timeout);
+                        const endTime = performance.now();
+                        const latency = Math.round(endTime - startTime);
+                        // 任何响应都算成功（包括404等），只要能连接
+                        resolve({ success: true, latency, status: response.status });
+                    },
+                    onerror: function(error) {
+                        clearTimeout(timeout);
+                        resolve({ success: false, latency: -1, error: 'network' });
+                    },
+                    ontimeout: function() {
+                        clearTimeout(timeout);
+                        resolve({ success: false, latency: -1, error: 'timeout' });
+                    }
+                });
+            });
+        }
+
+        // 检测所有代理
+        async function checkAllProxies() {
+            const container = modal.querySelector('#proxy-list-container');
+            if (!container || tempProxyList.length === 0) {
+                showNotification('❌ 没有可检测的代理', 'error');
+                return;
+            }
+
+            // 获取自定义超时时间
+            const timeoutInput = modal.querySelector('#proxy-timeout');
+            let timeoutMs = parseInt(timeoutInput.value) || 10000;
+            
+            // 验证超时时间范围
+            if (timeoutMs < 100) timeoutMs = 100;
+            if (timeoutMs > 100000) timeoutMs = 100000;
+            timeoutInput.value = timeoutMs;
+
+            const checkBtn = modal.querySelector('#check-all-proxies');
+            const originalText = checkBtn.textContent;
+            checkBtn.disabled = true;
+            checkBtn.textContent = '🔍 检测中...';
+
+            // 显示所有状态标签并设置为检测中
+            const items = container.querySelectorAll('.iwara-proxy-item');
+            items.forEach(item => {
+                const statusSpan = item.querySelector('.iwara-proxy-status');
+                if (statusSpan) {
+                    statusSpan.style.display = 'inline-block';
+                    statusSpan.className = 'iwara-proxy-status checking';
+                    statusSpan.textContent = '检测中...';
+                }
+                // 清除之前的检测结果
+                const proxy = tempProxyList[item.dataset.index];
+                if (proxy) {
+                    delete proxy.checkResult;
+                }
+            });
+
+            // 并发检测所有代理
+            const results = await Promise.all(
+                tempProxyList.map(proxy => checkSingleProxy(proxy.url, timeoutMs))
+            );
+
+            // 更新显示结果
+            results.forEach((result, index) => {
+                const item = container.querySelector(`[data-index="${index}"]`);
+                if (!item) return;
+
+                const statusSpan = item.querySelector('.iwara-proxy-status');
+                if (!statusSpan) return;
+
+                // 保存检测结果到代理对象
+                tempProxyList[index].checkResult = result;
+
+                if (result.success) {
+                    const latency = result.latency;
+                    statusSpan.textContent = `${latency}ms`;
+                    
+                    // 根据延迟设置不同颜色
+                    if (latency < 200) {
+                        statusSpan.className = 'iwara-proxy-status success';
+                    } else if (latency < 1000) {
+                        statusSpan.className = 'iwara-proxy-status slow';
+                    } else {
+                        statusSpan.className = 'iwara-proxy-status slow';
+                    }
+                } else {
+                    statusSpan.className = 'iwara-proxy-status failed';
+                    statusSpan.textContent = result.error === 'timeout' ? '超时' : '失败';
+                }
+            });
+
+            checkBtn.disabled = false;
+            checkBtn.textContent = originalText;
+
+            const successCount = results.filter(r => r.success).length;
+            const failCount = results.length - successCount;
+            showNotification(`✅ 检测完成: ${successCount} 个可用, ${failCount} 个失败`, 'success');
+        }
+
+        // 启用全部代理
+        function enableAllProxies() {
+            if (tempProxyList.length === 0) {
+                showNotification('ℹ️ 没有可启用的代理', 'info');
+                return;
+            }
+
+            const disabledCount = tempProxyList.filter(p => !p.enabled).length;
+            
+            if (disabledCount === 0) {
+                showNotification('ℹ️ 所有代理都已启用', 'info');
+                return;
+            }
+
+            tempProxyList.forEach(proxy => {
+                proxy.enabled = true;
+            });
+            renderProxyList();
+            showNotification(`✅ 已启用全部代理 (${disabledCount} 个)`, 'success');
+        }
+
+        // 禁用所有失败的代理
+        function disableFailedProxies() {
+            const failedCount = tempProxyList.filter(p => p.checkResult && !p.checkResult.success).length;
+            
+            if (failedCount === 0) {
+                showNotification('ℹ️ 没有检测到超时的代理', 'info');
+                return;
+            }
+
+            if (confirm(`确定要禁用 ${failedCount} 个失败的代理吗？`)) {
+                tempProxyList.forEach(proxy => {
+                    if (proxy.checkResult && !proxy.checkResult.success) {
+                        proxy.enabled = false;
+                    }
+                });
+                renderProxyList();
+                showNotification(`✅ 已禁用 ${failedCount} 个失败的代理`, 'success');
+            }
+        }
+
+        // 删除所有失败的代理
+        function deleteFailedProxies() {
+            const failedCount = tempProxyList.filter(p => p.checkResult && !p.checkResult.success).length;
+            
+            if (failedCount === 0) {
+                showNotification('ℹ️ 没有检测到超时的代理', 'info');
+                return;
+            }
+
+            if (confirm(`确定要删除 ${failedCount} 个失败的代理吗？\n\n此操作不可恢复！`)) {
+                tempProxyList = tempProxyList.filter(p => !p.checkResult || p.checkResult.success);
+                renderProxyList();
+                showNotification(`✅ 已删除 ${failedCount} 个失败的代理`, 'success');
+            }
         }
 
         // 设置代理编辑模式
@@ -1864,27 +2090,33 @@
 
             if (!toggleModeBtn) return;
 
+            const saveMultiEditBtn = modal.querySelector('#save-multi-edit');
+
             toggleModeBtn.addEventListener('click', () => {
-                isMultiEditMode = !isMultiEditMode;
+                // 切换到手动编辑
+                const textarea = modal.querySelector('#proxy-input');
+                const lines = tempProxyList.map(p => {
+                    const prefix = p.enabled ? '' : '#';
+                    return `${prefix}${p.url}`;
+                });
+                textarea.value = lines.join('\n');
 
-                if (isMultiEditMode) {
-                    // 切换到多行编辑
-                    const textarea = modal.querySelector('#proxy-input');
-                    const lines = tempProxyList.map(p => {
-                        const prefix = p.enabled ? '' : '#';
-                        return `${prefix}${p.url}`;
-                    });
-                    textarea.value = lines.join('\n');
+                singleAddMode.style.display = 'none';
+                multiEditMode.style.display = 'block';
+                saveMultiEditBtn.style.display = 'block';
+                toggleModeBtn.textContent = '📋 列表编辑';
+            });
 
-                    singleAddMode.style.display = 'none';
-                    multiEditMode.style.display = 'block';
-                    toggleModeBtn.textContent = '📋 列表编辑';
-                } else {
-                    // 切换到列表编辑
+            // 保存手动编辑
+            if (saveMultiEditBtn) {
+                saveMultiEditBtn.addEventListener('click', () => {
                     const textarea = modal.querySelector('#proxy-input');
                     const lines = textarea.value.split('\n');
 
                     tempProxyList = [];
+                    const urlSet = new Set(); // 用于去重
+                    let duplicateCount = 0;
+
                     lines.forEach(line => {
                         line = line.trim();
                         if (line === '') return;
@@ -1898,16 +2130,30 @@
                         }
 
                         if (url !== '') {
-                            tempProxyList.push({ url, enabled });
+                            // 标准化URL用于去重判断
+                            const normalized = normalizeProxyUrl(url);
+                            if (normalized && !urlSet.has(normalized)) {
+                                urlSet.add(normalized);
+                                tempProxyList.push({ url: normalized, enabled });
+                            } else if (normalized && urlSet.has(normalized)) {
+                                duplicateCount++;
+                            }
                         }
                     });
 
                     multiEditMode.style.display = 'none';
                     singleAddMode.style.display = 'block';
-                    toggleModeBtn.textContent = '📝 多行编辑';
+                    saveMultiEditBtn.style.display = 'none';
+                    toggleModeBtn.textContent = '📝 手动编辑';
                     renderProxyList();
-                }
-            });
+                    
+                    if (duplicateCount > 0) {
+                        showNotification(`✅ 已保存并切换到列表编辑（已去重 ${duplicateCount} 个重复项）`, 'success');
+                    } else {
+                        showNotification('✅ 已保存并切换到列表编辑', 'success');
+                    }
+                });
+            }
 
             // 添加代理
             addProxyBtn.addEventListener('click', () => {
@@ -1940,6 +2186,43 @@
                     addProxyBtn.click();
                 }
             });
+
+            // 超时时间输入框变化监听
+            const timeoutInput = modal.querySelector('#proxy-timeout');
+            if (timeoutInput) {
+                timeoutInput.addEventListener('change', () => {
+                    let value = parseInt(timeoutInput.value) || 10000;
+                    // 验证范围
+                    if (value < 100) value = 100;
+                    if (value > 100000) value = 100000;
+                    timeoutInput.value = value;
+                    tempProxyTimeout = value;
+                });
+            }
+
+            // 检测所有代理按钮
+            const checkAllBtn = modal.querySelector('#check-all-proxies');
+            if (checkAllBtn) {
+                checkAllBtn.addEventListener('click', checkAllProxies);
+            }
+
+            // 启用全部代理按钮
+            const enableAllBtn = modal.querySelector('#enable-all-proxies');
+            if (enableAllBtn) {
+                enableAllBtn.addEventListener('click', enableAllProxies);
+            }
+
+            // 禁用失败代理按钮
+            const disableFailedBtn = modal.querySelector('#disable-failed-proxies');
+            if (disableFailedBtn) {
+                disableFailedBtn.addEventListener('click', disableFailedProxies);
+            }
+
+            // 删除失败代理按钮
+            const deleteFailedBtn = modal.querySelector('#delete-failed-proxies');
+            if (deleteFailedBtn) {
+                deleteFailedBtn.addEventListener('click', deleteFailedProxies);
+            }
         }
 
         // 初始化
@@ -1955,11 +2238,6 @@
         // 关闭按钮
         const closeModal = () => modal.remove();
         modal.querySelector('#btn-close').addEventListener('click', closeModal);
-        modal.querySelector('.iwara-modal-overlay').addEventListener('click', (e) => {
-            if (e.target.classList.contains('iwara-modal-overlay')) {
-                closeModal();
-            }
-        });
 
         // 保存设置按钮
         function saveSettings(shouldReload = false) {
@@ -2010,6 +2288,13 @@
             if (oldListStr !== newListStr) {
                 proxyList = validatedProxyList;
                 GM_setValue('proxyList', proxyList);
+                hasChanges = true;
+            }
+
+            // 保存代理超时时间
+            if (proxyTimeout !== tempProxyTimeout) {
+                proxyTimeout = tempProxyTimeout;
+                GM_setValue('proxyTimeout', proxyTimeout);
                 hasChanges = true;
             }
 
@@ -2836,6 +3121,131 @@
         }, 3000);
     }
 
+    // 通知容器和队列管理（新版本 - 支持堆叠）
+    let notificationContainer = null;
+    const activeNotifications = new Set();
+
+    // 显示通知（优化版 - 带代理信息和堆叠管理）
+    function showNotificationV2(message, type = 'info') {
+        // 添加代理主机名信息
+        const enabledProxies = proxyList.filter(p => p.enabled);
+        if (enabledProxies.length > 0) {
+            const currentProxy = enabledProxies[Math.floor(Math.random() * enabledProxies.length)];
+            try {
+                const url = new URL(currentProxy.url);
+                const hostname = url.hostname;
+                message = `${message}\n🔗 当前代理: ${hostname}`;
+            } catch (e) {
+                // URL 解析失败，不添加主机名
+            }
+        }
+
+        const styles = {
+            error: {
+                bg: 'linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%)',
+                glow: 'rgba(255, 107, 107, 0.5)',
+                glowStrong: 'rgba(255, 107, 107, 0.8)'
+            },
+            success: {
+                bg: 'linear-gradient(135deg, #51cf66 0%, #37b24d 100%)',
+                glow: 'rgba(81, 207, 102, 0.5)',
+                glowStrong: 'rgba(81, 207, 102, 0.8)'
+            },
+            info: {
+                bg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                glow: 'rgba(102, 126, 234, 0.5)',
+                glowStrong: 'rgba(102, 126, 234, 0.8)'
+            }
+        };
+
+        // 确保容器存在
+        if (!notificationContainer) {
+            notificationContainer = document.createElement('div');
+            notificationContainer.id = 'iwara-notification-container';
+            notificationContainer.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 9999999;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+                pointer-events: none;
+            `;
+            document.body.appendChild(notificationContainer);
+
+            // 添加全局样式
+            if (!document.getElementById('iwara-notification-styles')) {
+                const globalStyles = document.createElement('style');
+                globalStyles.id = 'iwara-notification-styles';
+                globalStyles.textContent = `
+                    @keyframes slideInRight {
+                        from { transform: translateX(100%); opacity: 0; }
+                        to { transform: translateX(0); opacity: 1; }
+                    }
+                    @keyframes slideOutRight {
+                        from { transform: translateX(0); opacity: 1; }
+                        to { transform: translateX(100%); opacity: 0; }
+                    }
+                `;
+                document.head.appendChild(globalStyles);
+            }
+        }
+
+        const style = styles[type] || styles.info;
+        const notification = document.createElement('div');
+        notification.className = 'iwara-notification-item';
+        notification.style.cssText = `
+            padding: 16px 24px;
+            background: ${style.bg};
+            color: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 20px ${style.glow};
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            animation: slideInRight 0.3s ease;
+            white-space: pre-line;
+            pointer-events: auto;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        `;
+
+        // 添加脉冲动画样式
+        const pulseId = `pulse-${Date.now()}`;
+        const styleSheet = document.createElement('style');
+        styleSheet.textContent = `
+            @keyframes ${pulseId} {
+                0%, 100% { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 20px ${style.glow}; }
+                50% { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 30px ${style.glowStrong}, 0 0 10px rgba(255, 255, 255, 0.5); }
+            }
+        `;
+        notification.appendChild(styleSheet);
+        notification.style.animation += `, ${pulseId} 1.5s ease-in-out infinite`;
+
+        notification.textContent = message;
+        notificationContainer.appendChild(notification);
+        activeNotifications.add(notification);
+
+        // 自动移除
+        setTimeout(() => {
+            notification.style.animation = 'slideOutRight 0.3s ease';
+            setTimeout(() => {
+                activeNotifications.delete(notification);
+                notification.remove();
+                
+                // 如果没有通知了，移除容器
+                if (activeNotifications.size === 0 && notificationContainer) {
+                    notificationContainer.remove();
+                    notificationContainer = null;
+                }
+            }, 300);
+        }, 3000);
+    }
+
+    // 使用新版本通知函数
+    showNotification = showNotificationV2;
+
     // 统一设置菜单
     GM_registerMenuCommand('⚙️ 播放器设置', createSettingsModal);
 
@@ -2921,8 +3331,27 @@
 
             // 步骤4: 提取链接 - 优先使用指定画质，否则使用设置的画质
             const targetQuality = quality || videoQuality;
-            const video = resources.find(v => v.name === targetQuality) || resources.find(v => v.name === 'Source') || resources[0];
+            
+            // 调试：输出所有可用画质
+            console.log('[Iwara Player] 可用画质:', resources.map(v => v.name));
+            console.log('[Iwara Player] 目标画质:', targetQuality);
+            
+            // 查找匹配的画质
+            let video = resources.find(v => v.name === targetQuality);
+            
+            // 如果没找到精确匹配，尝试模糊匹配（例如 '540' 匹配 '540p'）
+            if (!video && targetQuality) {
+                video = resources.find(v => v.name.includes(targetQuality) || targetQuality.includes(v.name));
+            }
+            
+            // 如果还是没找到，使用 Source 或第一个
+            if (!video) {
+                video = resources.find(v => v.name === 'Source') || resources[0];
+            }
+            
             const finalUrl = 'https:' + video.src.view;
+            
+            console.log('[Iwara Player] 最终使用画质:', video.name);
 
             return { url: finalUrl, title: info.title, quality: video.name };
         } catch (error) {
@@ -3035,7 +3464,7 @@
                 '\n画质: 当前网页画质',
                 '\nURL:', finalUrl);
 
-            showNotification(`🎬 调用 ${externalPlayer} 播放器\n画质: 当前网页画质`, 'info');
+            showNotification(`🎬 调用 ${externalPlayer} 播放器\n📸 画质: 当前网页画质`, 'info');
             window.open(protocolUrl, '_self');
         } catch (error) {
             console.error('[Iwara Player] 调用失败:', error);
@@ -3061,7 +3490,7 @@
                 '\nURL:', finalUrl);
 
             // 使用外部播放器播放
-            showNotification(`🎬 调用 ${externalPlayer} 播放器\n画质: ${actualQuality}`, 'info');
+            showNotification(`🎬 调用 ${externalPlayer} 播放器\n📸 画质: ${actualQuality}`, 'info');
             const protocolUrl = getPlayerProtocolUrl(externalPlayer, finalUrl, finalTitle);
             window.open(protocolUrl, '_self');
         } catch (error) {
