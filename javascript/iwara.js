@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Iwara 外部播放器
 // @namespace    none
-// @version,     1.1
-// @description  支持外部播放器和链接代理
+// @version      1.4
+// @description  支持外部播放器和视频播放链接代理(需自建服务)
 // @author       EvilSissi
 // @match        *://*.iwara.tv/*
 // @include      *://*/*iwara.tv/*
@@ -65,8 +65,18 @@
             border-radius: 50%;
             font-size: 24px;
         }
+        #iwara-mpv-settings-fab svg {
+            width: 28px;
+            height: 28px;
+            fill: #ffffff;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: block;
+        }
         #iwara-mpv-settings-fab:hover {
-            transform: translateY(-2px) scale(1.1) rotate(90deg);
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.7);
+        }
+        #iwara-mpv-settings-fab:hover svg {
+            transform: rotate(90deg);
         }
 
         /* 视频播放页按钮组 - 1x4 垂直布局 */
@@ -351,24 +361,67 @@
         }
         .iwara-settings-section-title {
             color: #e2e8f0;
-            margin: -4px 0 16px 0;
-            font-size: 16px;
-            font-weight: 600;
+            margin: 0 0 20px 0;
+            font-size: 17px;
+            font-weight: 700;
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding-bottom: 12px;
-            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+            gap: 10px;
+            padding-bottom: 0;
+            border-bottom: none;
+            position: relative;
+            padding-left: 16px;
+            letter-spacing: 0.3px;
+        }
+        .iwara-settings-section-title::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 20px;
+            background: linear-gradient(to bottom, #667eea, #764ba2);
+            border-radius: 2px;
+        }
+        .iwara-settings-section-title.no-indicator {
+            padding-left: 0;
+        }
+        .iwara-settings-section-title.no-indicator::before {
+            display: none;
         }
         .iwara-settings-section {
-            padding: 20px;
-            margin-bottom: 16px;
-            background: rgba(255, 255, 255, 0.02);
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 24px 0;
+            margin-bottom: 0;
+            background: transparent;
+            border-radius: 0;
+            border: none;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            position: relative;
+        }
+        .iwara-settings-section::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: -1px;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.3), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .iwara-settings-section:hover::before {
+            opacity: 1;
         }
         .iwara-settings-section:last-child {
             margin-bottom: 0;
+            border-bottom: none;
+        }
+        .iwara-settings-section:last-child::before {
+            display: none;
+        }
+        .iwara-settings-section:first-child {
+            padding-top: 0;
         }
         .iwara-settings-header {
             display: flex;
@@ -461,48 +514,116 @@
             display: flex;
             align-items: center;
             padding: 12px 14px;
-            margin-bottom: 6px;
+            margin-bottom: 8px;
             border-radius: 12px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             border: 1px solid transparent;
+            position: relative;
+            overflow: hidden;
+        }
+        .iwara-sidebar-player-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: linear-gradient(to bottom, #667eea, #764ba2);
+            transform: scaleY(0);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border-radius: 0 2px 2px 0;
+        }
+        .iwara-sidebar-player-item::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.05));
+            opacity: 0;
+            transition: opacity 0.3s;
+            border-radius: 12px;
         }
         .iwara-sidebar-player-item:hover {
-            background: rgba(102, 126, 234, 0.08);
-            border-color: rgba(102, 126, 234, 0.2);
+            border-color: rgba(102, 126, 234, 0.25);
+            transform: translateX(4px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.12);
+        }
+        .iwara-sidebar-player-item:hover::before {
+            transform: scaleY(1);
+        }
+        .iwara-sidebar-player-item:hover::after {
+            opacity: 1;
         }
         .iwara-sidebar-player-item.active {
-            background: rgba(102, 126, 234, 0.15);
-            border-color: rgba(102, 126, 234, 0.4);
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.18), rgba(118, 75, 162, 0.12));
+            border-color: rgba(102, 126, 234, 0.45);
+            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            transform: translateX(4px);
+        }
+        .iwara-sidebar-player-item.active::before {
+            transform: scaleY(1);
+        }
+        .iwara-sidebar-player-item.active::after {
+            opacity: 0;
         }
         .iwara-sidebar-player-icon {
-            width: 36px;
-            height: 36px;
+            width: 42px;
+            height: 42px;
             display: flex;
             align-items: center;
             justify-content: center;
             margin-right: 12px;
-            font-size: 20px;
+            font-size: 22px;
             background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
+            border-radius: 11px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            z-index: 1;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+        .iwara-sidebar-player-item:hover .iwara-sidebar-player-icon {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.1));
+            transform: scale(1.08) rotate(-5deg);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.25), inset 0 1px 2px rgba(255, 255, 255, 0.1);
+        }
+        .iwara-sidebar-player-item.active .iwara-sidebar-player-icon {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.25), rgba(118, 75, 162, 0.18));
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35), inset 0 1px 2px rgba(255, 255, 255, 0.15);
         }
         .iwara-sidebar-player-icon img {
-            width: 28px;
-            height: 28px;
+            width: 30px;
+            height: 30px;
             object-fit: contain;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .iwara-sidebar-player-item:hover .iwara-sidebar-player-icon img {
+            transform: scale(1.1);
         }
         .iwara-sidebar-player-info {
             flex: 1;
             min-width: 0;
+            position: relative;
+            z-index: 1;
         }
         .iwara-sidebar-player-name {
             font-size: 14px;
-            font-weight: 500;
-            color: #e2e8f0;
-            margin: 0 0 2px 0;
+            font-weight: 600;
+            color: #cbd5e1;
+            margin: 0 0 3px 0;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            transition: all 0.3s;
+            letter-spacing: 0.2px;
+        }
+        .iwara-sidebar-player-item:hover .iwara-sidebar-player-name {
+            color: #e0e7ff;
+            transform: translateX(2px);
+        }
+        .iwara-sidebar-player-item.active .iwara-sidebar-player-name {
+            color: #e0e7ff;
+            font-weight: 700;
         }
         .iwara-sidebar-player-desc {
             font-size: 11px;
@@ -511,53 +632,116 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            transition: all 0.3s;
+        }
+        .iwara-sidebar-player-item:hover .iwara-sidebar-player-desc {
+            color: #94a3b8;
+            transform: translateX(2px);
+        }
+        .iwara-sidebar-player-item.active .iwara-sidebar-player-desc {
+            color: #a78bfa;
+            font-weight: 500;
         }
         
         /* 左侧底部 - 设置 */
         .iwara-sidebar-footer {
             padding: 16px;
             border-top: 1px solid rgba(255, 255, 255, 0.06);
-            background: rgba(0, 0, 0, 0.2);
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.15));
             height: 86px;
             box-sizing: border-box;
             display: flex;
             align-items: center;
+            position: relative;
+        }
+        .iwara-sidebar-footer::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.3), transparent);
         }
         .iwara-sidebar-main-settings {
             display: flex;
             align-items: center;
             width: 100%;
-            padding: 12px;
-            background: rgba(102, 126, 234, 0.1);
-            border: 1px solid rgba(102, 126, 234, 0.25);
-            border-radius: 10px;
+            padding: 14px 16px;
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 12px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .iwara-sidebar-main-settings::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+            opacity: 0;
+            transition: opacity 0.3s;
+            border-radius: 12px;
+        }
+        .iwara-sidebar-main-settings:hover::before {
+            opacity: 1;
         }
         .iwara-sidebar-main-settings:hover {
-            background: rgba(102, 126, 234, 0.15);
-            border-color: rgba(102, 126, 234, 0.35);
+            border-color: rgba(102, 126, 234, 0.25);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
         }
         .iwara-sidebar-main-settings.active {
-            background: rgba(102, 126, 234, 0.2);
-            border-color: rgba(102, 126, 234, 0.5);
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.18), rgba(118, 75, 162, 0.15));
+            border-color: rgba(102, 126, 234, 0.45);
+            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+        .iwara-sidebar-main-settings.active::before {
+            opacity: 0;
         }
         .iwara-sidebar-main-icon {
-            width: 32px;
-            height: 32px;
+            width: 40px;
+            height: 40px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-right: 10px;
-            font-size: 18px;
-            background: rgba(102, 126, 234, 0.15);
-            border-radius: 8px;
-            color: #818cf8;
+            margin-right: 12px;
+            font-size: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            color: #94a3b8;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            z-index: 1;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+        .iwara-sidebar-main-settings:hover .iwara-sidebar-main-icon {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.15));
+            color: #a78bfa;
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3), inset 0 1px 2px rgba(255, 255, 255, 0.1);
+        }
+        .iwara-sidebar-main-settings.active .iwara-sidebar-main-icon {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.3), rgba(118, 75, 162, 0.25));
+            color: #c4b5fd;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.15);
         }
         .iwara-sidebar-main-text {
-            font-size: 13px;
-            font-weight: 500;
-            color: #c7d2fe;
+            font-size: 14px;
+            font-weight: 600;
+            color: #94a3b8;
+            transition: all 0.3s;
+            position: relative;
+            z-index: 1;
+            letter-spacing: 0.3px;
+        }
+        .iwara-sidebar-main-settings:hover .iwara-sidebar-main-text {
+            color: #e0e7ff;
+        }
+        .iwara-sidebar-main-settings.active .iwara-sidebar-main-text {
+            color: #e0e7ff;
         }
         
         /* 右侧内容区 */
@@ -671,11 +855,33 @@
             transition: all 0.2s;
         }
         .iwara-btn-cancel {
-            background: rgba(255, 255, 255, 0.1);
-            color: #e0e0e0;
+            background: rgba(255, 255, 255, 0.08);
+            color: #cbd5e1;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .iwara-btn-cancel::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(220, 38, 38, 0.1));
+            opacity: 0;
+            transition: opacity 0.3s;
         }
         .iwara-btn-cancel:hover {
-            background: rgba(255, 255, 255, 0.15);
+            background: rgba(239, 68, 68, 0.15);
+            border-color: rgba(239, 68, 68, 0.4);
+            color: #fca5a5;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+        }
+        .iwara-btn-cancel:hover::before {
+            opacity: 1;
+        }
+        .iwara-btn-cancel:active {
+            transform: translateY(0);
         }
         .iwara-btn-secondary {
             background: rgba(102, 126, 234, 0.2);
@@ -719,10 +925,24 @@
             margin-bottom: 0;
         }
         .iwara-settings-section h3 {
-            margin: 0 0 16px 0;
-            color: #e0e0e0;
-            font-size: 16px;
-            font-weight: 600;
+            margin: 0 0 20px 0;
+            color: #e2e8f0;
+            font-size: 17px;
+            font-weight: 700;
+            position: relative;
+            padding-left: 16px;
+            letter-spacing: 0.3px;
+        }
+        .iwara-settings-section h3::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 20px;
+            background: linear-gradient(to bottom, #667eea, #764ba2);
+            border-radius: 2px;
         }
         .iwara-hint {
             margin: 8px 0 0 0;
@@ -1118,16 +1338,58 @@
             url = 'https://' + url;
         }
 
-        // 检查是否以 / 结尾
-        if (!url.endsWith('/')) {
-            url = url + '/';
-        }
-
         // 验证URL格式
         try {
-            new URL(url);
-            return url;
+            const urlObj = new URL(url);
+
+            // 验证域名：必须包含点号（.）表示是有效域名
+            const hostname = urlObj.hostname;
+
+            // 检查是否包含非ASCII字符（中文等）
+            if (!/^[a-z0-9.-]+$/i.test(hostname)) {
+                console.warn(`[Iwara Player] 无效的代理域名（包含非法字符）: ${hostname}`);
+                return null;
+            }
+
+            // 检查是否至少包含一个点号（排除 localhost 等）
+            if (!hostname.includes('.')) {
+                console.warn(`[Iwara Player] 无效的代理域名（缺少顶级域名）: ${hostname}`);
+                return null;
+            }
+
+            // 检查域名部分是否为空或只有点号
+            const parts = hostname.split('.');
+            if (parts.some(part => part === '')) {
+                console.warn(`[Iwara Player] 无效的代理域名格式: ${hostname}`);
+                return null;
+            }
+
+            // 检查顶级域名长度（至少2个字符）
+            const tld = parts[parts.length - 1];
+            if (tld.length < 2) {
+                console.warn(`[Iwara Player] 无效的顶级域名: ${tld}`);
+                return null;
+            }
+
+            // 重构URL：协议和域名小写，路径保持原样
+            const protocol = urlObj.protocol.toLowerCase(); // http: 或 https:
+            const lowercaseHostname = hostname.toLowerCase();
+            const port = urlObj.port ? `:${urlObj.port}` : '';
+            const pathname = urlObj.pathname; // 保持原始大小写
+            const search = urlObj.search; // 保持原始大小写
+            const hash = urlObj.hash; // 保持原始大小写
+
+            // 重组URL
+            let normalizedUrl = `${protocol}//${lowercaseHostname}${port}${pathname}${search}${hash}`;
+
+            // 检查是否以 / 结尾（仅当没有查询参数和hash时）
+            if (!search && !hash && !normalizedUrl.endsWith('/')) {
+                normalizedUrl += '/';
+            }
+
+            return normalizedUrl;
         } catch (e) {
+            console.warn(`[Iwara Player] URL格式错误: ${url}`, e);
             return null;
         }
     }
@@ -1724,7 +1986,7 @@
                 
                 <!-- 按钮显示设置 -->
                 <div class="iwara-settings-section">
-                    <h4 class="iwara-settings-section-title">⚪ 按钮显示设置</h4>
+                    <h4 class="iwara-settings-section-title no-indicator">⚪ 按钮显示设置</h4>
                     
                     <div class="iwara-settings-subsection">
                         <h5>📄 详情页</h5>
@@ -1774,7 +2036,7 @@
                 <!-- 代理服务设置 -->
                 <div class="iwara-settings-section">
                     <div class="iwara-settings-header">
-                        <h4>🔗 代理服务</h4>
+                        <h4>🔗 代理服务 (可选)</h4>
                         <div style="display: flex; gap: 8px;">
                             <button class="iwara-btn-small" id="save-multi-edit" style="display: none;">💾 保存</button>
                             <button class="iwara-btn-small" id="toggle-edit-mode">📝 手动编辑</button>
@@ -1783,7 +2045,7 @@
                     
                     <div id="single-add-mode" style="display: block;">
                         <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-                            <input type="text" id="new-proxy-input" placeholder="代理地址，多个将会随机选取" class="iwara-form-input" style="flex: 1;">
+                            <input type="text" id="new-proxy-input" placeholder="多个将会随机选取, 代理地址 例: https://proxy.example.com/" class="iwara-form-input" style="flex: 1;">
                             <button class="iwara-btn-small" id="add-proxy">➕ 添加</button>
                         </div>
                         <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;">
@@ -1808,6 +2070,7 @@
                     <p style="color: #64748b; font-size: 12px; margin: 8px 0 0 0;">
                         <a href="https://github.com/1234567Yang/cf-proxy-ex" target="_blank" style="color: #818cf8; text-decoration: none;">⭐ 代理项目(需自行部署): cf-proxy-ex</a>
                     </p>
+                    <p style="color: #64748b; font-size: 12px; margin: 8px 0 0 0;">⏩ 仅代理视频的播放链接</p>
                 </div>
             `;
 
@@ -1913,7 +2176,7 @@
         // 检测单个代理
         async function checkSingleProxy(proxyUrl, timeoutMs) {
             const startTime = performance.now();
-            
+
             return new Promise((resolve) => {
                 const timeout = setTimeout(() => {
                     resolve({ success: false, latency: -1, error: 'timeout' });
@@ -1923,18 +2186,18 @@
                     method: 'GET',
                     url: proxyUrl,
                     timeout: timeoutMs,
-                    onload: function(response) {
+                    onload: function (response) {
                         clearTimeout(timeout);
                         const endTime = performance.now();
                         const latency = Math.round(endTime - startTime);
                         // 任何响应都算成功（包括404等），只要能连接
                         resolve({ success: true, latency, status: response.status });
                     },
-                    onerror: function(error) {
+                    onerror: function (error) {
                         clearTimeout(timeout);
                         resolve({ success: false, latency: -1, error: 'network' });
                     },
-                    ontimeout: function() {
+                    ontimeout: function () {
                         clearTimeout(timeout);
                         resolve({ success: false, latency: -1, error: 'timeout' });
                     }
@@ -1953,7 +2216,7 @@
             // 获取自定义超时时间
             const timeoutInput = modal.querySelector('#proxy-timeout');
             let timeoutMs = parseInt(timeoutInput.value) || 10000;
-            
+
             // 验证超时时间范围
             if (timeoutMs < 100) timeoutMs = 100;
             if (timeoutMs > 100000) timeoutMs = 100000;
@@ -1999,7 +2262,7 @@
                 if (result.success) {
                     const latency = result.latency;
                     statusSpan.textContent = `${latency}ms`;
-                    
+
                     // 根据延迟设置不同颜色
                     if (latency < 200) {
                         statusSpan.className = 'iwara-proxy-status success';
@@ -2030,7 +2293,7 @@
             }
 
             const disabledCount = tempProxyList.filter(p => !p.enabled).length;
-            
+
             if (disabledCount === 0) {
                 showNotification('ℹ️ 所有代理都已启用', 'info');
                 return;
@@ -2046,7 +2309,7 @@
         // 禁用所有失败的代理
         function disableFailedProxies() {
             const failedCount = tempProxyList.filter(p => p.checkResult && !p.checkResult.success).length;
-            
+
             if (failedCount === 0) {
                 showNotification('ℹ️ 没有检测到超时的代理', 'info');
                 return;
@@ -2066,7 +2329,7 @@
         // 删除所有失败的代理
         function deleteFailedProxies() {
             const failedCount = tempProxyList.filter(p => p.checkResult && !p.checkResult.success).length;
-            
+
             if (failedCount === 0) {
                 showNotification('ℹ️ 没有检测到超时的代理', 'info');
                 return;
@@ -2093,29 +2356,15 @@
             const saveMultiEditBtn = modal.querySelector('#save-multi-edit');
 
             toggleModeBtn.addEventListener('click', () => {
-                // 切换到手动编辑
-                const textarea = modal.querySelector('#proxy-input');
-                const lines = tempProxyList.map(p => {
-                    const prefix = p.enabled ? '' : '#';
-                    return `${prefix}${p.url}`;
-                });
-                textarea.value = lines.join('\n');
-
-                singleAddMode.style.display = 'none';
-                multiEditMode.style.display = 'block';
-                saveMultiEditBtn.style.display = 'block';
-                toggleModeBtn.textContent = '📋 列表编辑';
-            });
-
-            // 保存手动编辑
-            if (saveMultiEditBtn) {
-                saveMultiEditBtn.addEventListener('click', () => {
+                if (isMultiEditMode) {
+                    // 切换回列表编辑模式（先保存）
                     const textarea = modal.querySelector('#proxy-input');
                     const lines = textarea.value.split('\n');
 
                     tempProxyList = [];
                     const urlSet = new Set(); // 用于去重
                     let duplicateCount = 0;
+                    let invalidCount = 0;
 
                     lines.forEach(line => {
                         line = line.trim();
@@ -2137,18 +2386,107 @@
                                 tempProxyList.push({ url: normalized, enabled });
                             } else if (normalized && urlSet.has(normalized)) {
                                 duplicateCount++;
+                            } else if (!normalized) {
+                                // 无效的URL
+                                invalidCount++;
                             }
                         }
                     });
 
+                    isMultiEditMode = false;
                     multiEditMode.style.display = 'none';
                     singleAddMode.style.display = 'block';
                     saveMultiEditBtn.style.display = 'none';
                     toggleModeBtn.textContent = '📝 手动编辑';
                     renderProxyList();
-                    
+
+                    // 构建提示信息
+                    let messages = [];
                     if (duplicateCount > 0) {
-                        showNotification(`✅ 已保存并切换到列表编辑（已去重 ${duplicateCount} 个重复项）`, 'success');
+                        messages.push(`已去重 ${duplicateCount} 个重复项`);
+                    }
+                    if (invalidCount > 0) {
+                        messages.push(`已忽略 ${invalidCount} 个无效项`);
+                    }
+
+                    if (messages.length > 0) {
+                        showNotification(`✅ 已保存并切换到列表编辑（${messages.join('，')}）`, 'success');
+                    } else {
+                        showNotification('✅ 已保存并切换到列表编辑', 'success');
+                    }
+                } else {
+                    // 切换到手动编辑
+                    isMultiEditMode = true;
+                    const textarea = modal.querySelector('#proxy-input');
+                    const lines = tempProxyList.map(p => {
+                        const prefix = p.enabled ? '' : '#';
+                        return `${prefix}${p.url}`;
+                    });
+                    textarea.value = lines.join('\n');
+
+                    singleAddMode.style.display = 'none';
+                    multiEditMode.style.display = 'block';
+                    saveMultiEditBtn.style.display = 'block';
+                    toggleModeBtn.textContent = '📋 列表编辑';
+                }
+            });
+
+            // 保存手动编辑
+            if (saveMultiEditBtn) {
+                saveMultiEditBtn.addEventListener('click', () => {
+                    const textarea = modal.querySelector('#proxy-input');
+                    const lines = textarea.value.split('\n');
+
+                    tempProxyList = [];
+                    const urlSet = new Set(); // 用于去重
+                    let duplicateCount = 0;
+                    let invalidCount = 0;
+
+                    lines.forEach(line => {
+                        line = line.trim();
+                        if (line === '') return;
+
+                        let enabled = true;
+                        let url = line;
+
+                        if (line.startsWith('#')) {
+                            enabled = false;
+                            url = line.substring(1).trim();
+                        }
+
+                        if (url !== '') {
+                            // 标准化URL用于去重判断
+                            const normalized = normalizeProxyUrl(url);
+                            if (normalized && !urlSet.has(normalized)) {
+                                urlSet.add(normalized);
+                                tempProxyList.push({ url: normalized, enabled });
+                            } else if (normalized && urlSet.has(normalized)) {
+                                duplicateCount++;
+                            } else if (!normalized) {
+                                // 无效的URL
+                                invalidCount++;
+                            }
+                        }
+                    });
+
+                    isMultiEditMode = false;
+                    multiEditMode.style.display = 'none';
+                    singleAddMode.style.display = 'block';
+                    saveMultiEditBtn.style.display = 'none';
+                    toggleModeBtn.textContent = '📝 手动编辑';
+                    renderProxyList();
+
+                    // 构建提示信息
+                    let messages = [];
+                    if (duplicateCount > 0) {
+                        messages.push(`已去重 ${duplicateCount} 个重复项`);
+                    }
+                    if (invalidCount > 0) {
+                        messages.push(`已忽略 ${invalidCount} 个无效项`);
+                    }
+
+                    if (messages.length > 0) {
+                        showNotification(`✅ 已保存并切换到列表编辑（${messages.join('，')}）`, 'success');
                     } else {
                         showNotification('✅ 已保存并切换到列表编辑', 'success');
                     }
@@ -3233,7 +3571,7 @@
             setTimeout(() => {
                 activeNotifications.delete(notification);
                 notification.remove();
-                
+
                 // 如果没有通知了，移除容器
                 if (activeNotifications.size === 0 && notificationContainer) {
                     notificationContainer.remove();
@@ -3259,7 +3597,11 @@
         const settingsButton = document.createElement('button');
         settingsButton.id = 'iwara-mpv-settings-fab';
         settingsButton.className = 'iwara-mpv-fab';
-        settingsButton.innerHTML = '⚙️';
+        settingsButton.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.53c.04-.32.07-.64.07-.97 0-.33-.03-.66-.07-1l2.11-1.63c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.31-.61-.22l-2.49 1c-.52-.39-1.06-.73-1.69-.98l-.37-2.65A.506.506 0 0 0 14 2h-4c-.25 0-.46.18-.5.42l-.37 2.65c-.63.25-1.17.59-1.69.98l-2.49-1c-.22-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64L4.57 11c-.04.34-.07.67-.07 1 0 .33.03.65.07.97l-2.11 1.66c-.19.15-.25.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1.01c.52.4 1.06.74 1.69.99l.37 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.37-2.65c.63-.26 1.17-.59 1.69-.99l2.49 1.01c.22.08.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.66z"/>
+            </svg>
+        `;
         settingsButton.title = '播放器设置';
 
         // 点击打开设置
@@ -3331,26 +3673,26 @@
 
             // 步骤4: 提取链接 - 优先使用指定画质，否则使用设置的画质
             const targetQuality = quality || videoQuality;
-            
+
             // 调试：输出所有可用画质
             console.log('[Iwara Player] 可用画质:', resources.map(v => v.name));
             console.log('[Iwara Player] 目标画质:', targetQuality);
-            
+
             // 查找匹配的画质
             let video = resources.find(v => v.name === targetQuality);
-            
+
             // 如果没找到精确匹配，尝试模糊匹配（例如 '540' 匹配 '540p'）
             if (!video && targetQuality) {
                 video = resources.find(v => v.name.includes(targetQuality) || targetQuality.includes(v.name));
             }
-            
+
             // 如果还是没找到，使用 Source 或第一个
             if (!video) {
                 video = resources.find(v => v.name === 'Source') || resources[0];
             }
-            
+
             const finalUrl = 'https:' + video.src.view;
-            
+
             console.log('[Iwara Player] 最终使用画质:', video.name);
 
             return { url: finalUrl, title: info.title, quality: video.name };
@@ -3768,12 +4110,12 @@
             document.querySelectorAll('.iwara-mpv-button-group').forEach(group => {
                 group.remove();
             });
-            
+
             // 清除处理标记
             document.querySelectorAll('.videoTeaser').forEach(teaser => {
                 teaser.dataset.mpvProcessed = '';
             });
-            
+
             // 重新创建按钮组
             handleVideoTeaserHover();
         }
